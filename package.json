@@ -1,0 +1,19 @@
+{
+	"name": "tvone-corio2",
+	"version": "1.0.0",
+	"api_version": "1.0.0",
+	"keywords": [
+		"Protocol",
+		"Scaler"
+	],
+	"manufacturer": "TVone",
+	"product": "Corio2",
+	"shortname": "Corio2",
+	"description": "Corio2 plugin for Companion",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"author": "Imre Liessens",
+	"license": "MIT"
+}
