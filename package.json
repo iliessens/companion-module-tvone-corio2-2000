@@ -1,5 +1,5 @@
 {
-	"name": "tvone-corio2",
+	"name": "tvone-corio2-2000",
 	"version": "1.0.0",
 	"api_version": "1.0.0",
 	"keywords": [
@@ -7,8 +7,8 @@
 		"Scaler"
 	],
 	"manufacturer": "TVone",
-	"product": "Corio2",
-	"shortname": "Corio2",
+	"product": "Corio2-2000",
+	"shortname": "C2-2000",
 	"description": "Corio2 plugin for Companion",
 	"main": "index.js",
 	"scripts": {

@@ -39,6 +39,14 @@ instance.prototype.updateConfig = function(config) {
 	};
 };
 
+instance.prototype.init = function() {
+	var self = this;
+	debug = self.debug;
+	log = self.log;
+	self.init_tcp();
+	self.initFeedbacks();
+};
+
 
 instance.prototype.incomingData = function(data) {
 	var self = this;
@@ -74,14 +82,6 @@ instance.prototype.incomingData = function(data) {
 	}
 };
 
-instance.prototype.init = function() {
-	var self = this;
-	debug = self.debug;
-	log = self.log;
-	self.init_tcp();
-	self.initFeedbacks();
-};
-
 instance.prototype.init_tcp = function() {
 	var self = this;
 	var receivebuffer = '';
@@ -110,9 +110,11 @@ instance.prototype.init_tcp = function() {
 			debug("Connected");
 			self.login = false;
 			if (self.socket !== undefined && self.socket.connected) {
+				// Get current input
 				packet = self.build_packet(false, self.FUNCTION_CODES.input);
 				self.send(packet)
 
+				// Get current freeze status
 				packet = self.build_packet(false, self.FUNCTION_CODES.freeze);
 				self.send(packet)
 			}
@@ -123,7 +125,8 @@ instance.prototype.init_tcp = function() {
 			self.log('error',"Network error: " + err.message);
 			self.login = false;
 		});
-		// if we get any data, display it to stdout
+		
+		// Process incoming data
 		self.socket.on("data", function(buffer) {
 			var indata = buffer.toString("utf8");
 			self.incomingData(indata);
@@ -134,6 +137,7 @@ instance.prototype.init_tcp = function() {
 	}
 };
 
+// Import feedbacks
 instance.prototype.getFeedbacks = feedback.getFeedbacks;
 
 //Define feedbacks
@@ -266,9 +270,9 @@ instance.prototype.CHOICES_INPUTS = [
 	{ label: 'RGB',   id: '10'   },
 	{ label: 'YUV',   id: '11'   },
 	{ label: 'DVI',  id: '12'  },
-	{ label: 'SDI',  id: '50'   },
+	{ label: 'YC', id: '30' },
 	{ label: 'CV', id: '40' },
-	{ label: 'YC', id: '30' }
+	{ label: 'SDI',  id: '50'   }
 ];
 
 instance.prototype.CHOICES_TRANSITIONS = [
@@ -328,9 +332,7 @@ instance.prototype.queue_pop = function() {
 	self = this;
 
 	if(self.message_queue.length === 0) return; // Empty
-
 	cmd = self.message_queue[0] // Get first element
-	console.log(self.message_queue)
 
 	if (self.socket !== undefined && self.socket.connected) {
 		self.socket.write(cmd);
