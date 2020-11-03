@@ -14,6 +14,7 @@ function instance(system, id, config) {
 	instance_skel.apply(this, arguments);
 	self.status(1,'Instance Initializing');
 	self.actions(); // export actions
+	self.input = null;
 	return self;
 }
 
@@ -21,6 +22,7 @@ instance.prototype.updateConfig = function(config) {
 	var self = this;
 	self.config = config;
 	self.init_tcp();
+	self.initFeedbacks();
 };
 
 
@@ -28,15 +30,26 @@ instance.prototype.incomingData = function(data) {
 	var self = this;
 	debug(data);
 
-	// Match part of the copyright response from unit when a connection is made.
-	// Send Info request which should reply with Config "CR 06 02"
-	if (self.login === false && data.match(/F44004100D2.*$/)) {
+	result = self.parse_packet(data);
+
+	if(!result.valid) {
+		debug("Invalid packet");
+		return;
+	}
+
+	if(result.ack) {
 		self.login = true;
 		self.status(self.STATUS_OK);
-		debug("logged in");
 	}
 	else {
-		debug("data nologin", data);
+		self.status(self.STATE_UNKNOWN);
+		return;
+	}
+
+	if(result.function === "082") {
+		console.log(result.payload)
+		self.input = parseInt(result.payload,16).toString(16); //Remove leading zeros
+		this.checkFeedbacks('input_bg');
 	}
 };
 
@@ -45,6 +58,7 @@ instance.prototype.init = function() {
 	debug = self.debug;
 	log = self.log;
 	self.init_tcp();
+	self.initFeedbacks();
 };
 
 instance.prototype.init_tcp = function() {
@@ -58,7 +72,7 @@ instance.prototype.init_tcp = function() {
 	}
 
 	if (self.config.host) {
-		self.socket = new tcp(self.config.host, 10001);
+		self.socket = new tcp(self.config.host, self.config.port);
 
 		self.socket.on('status_change', function (status, message) {
 			if (status !== self.STATUS_OK) {
@@ -75,7 +89,7 @@ instance.prototype.init_tcp = function() {
 			debug("Connected");
 			self.login = false;
 			if (self.socket !== undefined && self.socket.connected) {
-				self.socket.write(self.build_packet(false,"0D2",""));
+				self.socket.write(self.build_packet(false,"082",""));
 			}
 		});
 
@@ -95,6 +109,79 @@ instance.prototype.init_tcp = function() {
 	}
 };
 
+instance.prototype.getFeedbacks = function() {
+	var feedbacks = {
+		'input_bg': {
+			label: 'Change background colour by input',
+			description: 'If the input specified is in use, change background color of the bank',
+			options: [{
+				type: 'colorpicker',
+				label: 'Foreground color',
+				id: 'fg',
+				default: this.rgb(255, 255, 255)
+			}, {
+				type: 'colorpicker',
+				label: 'Background color',
+				id: 'bg',
+				default: this.rgb(255, 0, 0)
+			}, {
+				type: 'dropdown',
+				label: 'input',
+				id: 'input',
+				default: '10',
+				choices: this.CHOICES_INPUTS
+			}],
+			callback: (feedback, bank) => {
+				console.log("CU"+this.input)
+				console.log("FB"+feedback.options.input)
+				if (this.input === feedback.options.input) {
+					return {
+						color: feedback.options.fg,
+						bgcolor: feedback.options.bg
+					};
+				}
+			}
+		}
+	}
+	return feedbacks
+}
+
+//Define feedbacks
+instance.prototype.initFeedbacks = function() {
+	var feedbacks = this.getFeedbacks();
+	this.setFeedbackDefinitions(feedbacks);
+}
+
+instance.prototype.parse_packet = function(packet) {
+	var self = this;
+
+	result = {
+		"valid" : false,
+		"ack" : false,
+		"function": "",
+		"payload": ""
+	}
+	if(packet.length != 20) return result;
+
+	try {
+		//Verify checksum
+		packet_content = packet.substring(1,17)
+		cs = self.calculate_checksum(packet_content)
+		rx_cs = packet.substr(17,2);
+		if(rx_cs != cs) return result;
+
+		result.ack = (packet.substr(1,1) == "4")
+		result.function = packet.substr(8,3)
+		result.payload = packet.substr(11,6)
+
+		result.valid = true;
+	}
+	catch(e) {
+		debug('Error parsing packet');
+	}
+	return result;
+}
+
 instance.prototype.calculate_checksum = function(data) {
 	sum = 0;
 	for (i = 0; i < data.length; i = i + 2) {
@@ -106,21 +193,27 @@ instance.prototype.calculate_checksum = function(data) {
 	return cs;
 }
 
+// Write (true = write action, false = read)
+// Action: function code (string)
+// Payload (payload), automatically padded
 instance.prototype.build_packet = function(write, action, payload) {
 	var self = this;
 
 	cmd = "";
 	if(write) {
-		cmd += "44"; // write
+		cmd += "04"; // write
 	}
 	else {
-		cmd += "04"; // read
+		cmd += "84"; // read
 	}
 	cmd += "00"; // Source (optional)
 	cmd += "41"; // Primary window
 	cmd += "0"; // Output
 	cmd += action;
-	cmd += payload.padStart(6,'0');
+
+	if(write) {
+		cmd += payload.padStart(6,'0');
+	}
 
 	cmd += self.calculate_checksum(cmd); // Checksum
 
@@ -150,6 +243,14 @@ instance.prototype.config_fields = function () {
 			width: 12,
 			default: '192.168.2.100',
 			regex: self.REGEX_IP
+		},
+		{
+			type: 'textinput',
+			id: 'port',
+			label: 'Scaler TCP Port',
+			width: 5,
+			default: '10001',
+			regex: self.REGEX_NUMBER
 		}
 	]
 };
@@ -179,7 +280,13 @@ instance.prototype.CHOICES_TRANSITIONS = [
 	{ label: 'PUSH RIGHT',  id: '2'  },
 	{ label: 'PUSH LEFT',  id: '3'   },
 	{ label: 'PUSH UP', id: '4' },
-	{ label: 'PUSH DOWN', id: '5' }
+	{ label: 'PUSH DOWN', id: '5' },
+	{ label: 'WIPE RIGHT', id: '6' },
+	{ label: 'WIPE LEFT', id: '7' },
+	{ label: 'WIPE UP', id: '8' },
+	{ label: 'WIPE DOWN', id: '9' },
+	{ label: 'WIPE DIAGONAL', id: '10' },
+	{ label: 'WIPE DIAMOND', id: '11' }
 ];
 
 instance.prototype.actions = function (system) {
