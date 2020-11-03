@@ -16,10 +16,13 @@ function instance(system, id, config) {
 	instance_skel.apply(this, arguments);
 	self.status(1,'Instance Initializing');
 	self.actions(); // export actions
+
 	self.state = {
 		"input" : null,
 		"freeze" : null
 	};
+	self.message_queue = [];
+
 	return self;
 }
 
@@ -28,6 +31,12 @@ instance.prototype.updateConfig = function(config) {
 	self.config = config;
 	self.init_tcp();
 	self.initFeedbacks();
+
+	self.message_queue = [];
+	self.state = {
+		"input" : null,
+		"freeze" : null
+	};
 };
 
 
@@ -50,6 +59,10 @@ instance.prototype.incomingData = function(data) {
 		self.status(self.STATE_UNKNOWN);
 		return;
 	}
+
+	//Send next message
+	self.message_queue.shift(); //Remove acked message
+	self.queue_pop();
 
 	if(result.function === self.FUNCTION_CODES.input) {
 		self.state.input = result.payload; //Remove leading zeros
@@ -97,7 +110,11 @@ instance.prototype.init_tcp = function() {
 			debug("Connected");
 			self.login = false;
 			if (self.socket !== undefined && self.socket.connected) {
-				self.socket.write(self.build_packet(false, self.FUNCTION_CODES.input ,""));
+				packet = self.build_packet(false, self.FUNCTION_CODES.input);
+				self.send(packet)
+
+				packet = self.build_packet(false, self.FUNCTION_CODES.freeze);
+				self.send(packet)
 			}
 		});
 
@@ -171,7 +188,7 @@ instance.prototype.calculate_checksum = function(data) {
 // Write (true = write action, false = read)
 // Action: function code (string)
 // Payload (payload), automatically padded
-instance.prototype.build_packet = function(write, action, payload) {
+instance.prototype.build_packet = function(write, action, payload = "") {
 	var self = this;
 
 	cmd = "";
@@ -307,6 +324,29 @@ instance.prototype.actions = function (system) {
 	self.setActions(actions);
 };
 
+instance.prototype.queue_pop = function() {
+	self = this;
+
+	if(self.message_queue.length === 0) return; // Empty
+
+	cmd = self.message_queue[0] // Get first element
+	console.log(self.message_queue)
+
+	if (self.socket !== undefined && self.socket.connected) {
+		self.socket.write(cmd);
+	} else {
+		debug('Socket not connected :(');
+	}
+}
+
+instance.prototype.send = function(data) {
+	// Add to queue
+	this.message_queue.push(data)
+	if(this.message_queue.length == 1) { //Nothing in flight or queued
+		this.queue_pop()
+	}
+}
+
 
 instance.prototype.action = function (action) {
 	var self = this;
@@ -336,11 +376,7 @@ instance.prototype.action = function (action) {
 	}
 
 	if (cmd !== undefined) {
-		if (self.socket !== undefined && self.socket.connected) {
-			self.socket.write(cmd);
-		} else {
-			debug('Socket not connected :(');
-		}
+		self.send(cmd);
 	}
 };
 
