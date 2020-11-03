@@ -51,11 +51,11 @@ instance.prototype.incomingData = function(data) {
 		return;
 	}
 
-	if(result.function === "082") {
+	if(result.function === self.FUNCTION_CODES.input) {
 		self.state.input = result.payload; //Remove leading zeros
 		this.checkFeedbacks('input_bg');
 	}
-	else if(result.function === "09C") {
+	else if(result.function === self.FUNCTION_CODES.freeze) {
 		self.state.freeze = ( result.payload == "1");
 		this.checkFeedbacks('freeze_bg');
 	}
@@ -97,7 +97,7 @@ instance.prototype.init_tcp = function() {
 			debug("Connected");
 			self.login = false;
 			if (self.socket !== undefined && self.socket.connected) {
-				self.socket.write(self.build_packet(false,"082",""));
+				self.socket.write(self.build_packet(false, self.FUNCTION_CODES.input ,""));
 			}
 		});
 
@@ -239,6 +239,12 @@ instance.prototype.destroy = function () {
 		debug("destroy", self.id);
 };
 
+instance.prototype.FUNCTION_CODES = {
+	input: "082",
+	freeze: "09C",
+	transition: "112"
+}
+
 instance.prototype.CHOICES_INPUTS = [
 	{ label: 'RGB',   id: '10'   },
 	{ label: 'YUV',   id: '11'   },
@@ -311,20 +317,20 @@ instance.prototype.action = function (action) {
 	switch (id) {
 		case 'input':
 			if(opt.input !== null) {
-				cmd = this.build_packet(true,"082",opt.input)
+				cmd = this.build_packet(true, self.FUNCTION_CODES.input ,opt.input)
 			}
 			break;
 		case 'freeze':
 			if (opt.enable == 'true') {
-				cmd = this.build_packet(true,"09C","1")
+				cmd = this.build_packet(true, self.FUNCTION_CODES.freeze ,"1")
 			}
 			else {
-				cmd = this.build_packet(true,"09C","0")
+				cmd = this.build_packet(true, self.FUNCTION_CODES.freeze ,"0")
 			}
 			break;
 		case 'transition':
 			if (opt.transition !== null ) {
-				cmd = this.build_packet(true,"112",opt.transition)
+				cmd = this.build_packet(true, self.FUNCTION_CODES.transition ,opt.transition)
 			}
 			break;
 	}
