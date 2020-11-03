@@ -1,5 +1,7 @@
 var tcp = require('../../tcp');
 var instance_skel = require('../../instance_skel');
+
+var feedback = require('./feedback');
 var debug;
 var log;
 
@@ -54,7 +56,7 @@ instance.prototype.incomingData = function(data) {
 		this.checkFeedbacks('input_bg');
 	}
 	else if(result.function === "09C") {
-		self.state.freeze = ( result.payload == 1);
+		self.state.freeze = ( result.payload == "1");
 		this.checkFeedbacks('freeze_bg');
 	}
 };
@@ -115,9 +117,11 @@ instance.prototype.init_tcp = function() {
 	}
 };
 
+instance.prototype.getFeedbacks = feedback.getFeedbacks;
+
 //Define feedbacks
 instance.prototype.initFeedbacks = function() {
-	var feedbacks = this.getFeedbacks();
+	var feedbacks = this.getFeedbacks()
 	this.setFeedbackDefinitions(feedbacks);
 }
 
@@ -193,64 +197,6 @@ instance.prototype.build_packet = function(write, action, payload) {
 	cmd += "\r"; // CR to confirm
 
 	return cmd;
-}
-
-instance.prototype.getFeedbacks = function() {
-	var feedbacks = {
-		'input_bg': {
-			label: 'Change background colour by input',
-			description: 'If the input specified is in use, change background color of the bank',
-			options: [{
-				type: 'colorpicker',
-				label: 'Foreground color',
-				id: 'fg',
-				default: this.rgb(255, 255, 255)
-			}, {
-				type: 'colorpicker',
-				label: 'Background color',
-				id: 'bg',
-				default: this.rgb(255, 0, 0)
-			}, {
-				type: 'dropdown',
-				label: 'input',
-				id: 'input',
-				default: '10',
-				choices: this.CHOICES_INPUTS
-			}],
-			callback: (feedback, bank) => {
-				if (this.state.input === feedback.options.input) {
-					return {
-						color: feedback.options.fg,
-						bgcolor: feedback.options.bg
-					};
-				}
-			}
-		},
-		'freeze_bg': {
-			label: 'Change background colour by freeze status',
-			description: 'If the output is frozen, change background color of the bank',
-			options: [{
-				type: 'colorpicker',
-				label: 'Foreground color',
-				id: 'fg',
-				default: this.rgb(255, 255, 255)
-			}, {
-				type: 'colorpicker',
-				label: 'Background color',
-				id: 'bg',
-				default: this.rgb(0, 0, 255)
-			}],
-			callback: (feedback, bank) => {
-				if (this.state.freeze) {
-					return {
-						color: feedback.options.fg,
-						bgcolor: feedback.options.bg
-					};
-				}
-			}
-		},
-	}
-	return feedbacks
 }
 
 // Fields for web config
