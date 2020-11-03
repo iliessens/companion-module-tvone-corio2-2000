@@ -14,7 +14,10 @@ function instance(system, id, config) {
 	instance_skel.apply(this, arguments);
 	self.status(1,'Instance Initializing');
 	self.actions(); // export actions
-	self.input = null;
+	self.state = {
+		"input" : null,
+		"freeze" : null
+	};
 	return self;
 }
 
@@ -47,9 +50,12 @@ instance.prototype.incomingData = function(data) {
 	}
 
 	if(result.function === "082") {
-		console.log(result.payload)
-		self.input = parseInt(result.payload,16).toString(16); //Remove leading zeros
+		self.state.input = result.payload; //Remove leading zeros
 		this.checkFeedbacks('input_bg');
+	}
+	else if(result.function === "09C") {
+		self.state.freeze = ( result.payload == 1);
+		this.checkFeedbacks('freeze_bg');
 	}
 };
 
@@ -109,43 +115,6 @@ instance.prototype.init_tcp = function() {
 	}
 };
 
-instance.prototype.getFeedbacks = function() {
-	var feedbacks = {
-		'input_bg': {
-			label: 'Change background colour by input',
-			description: 'If the input specified is in use, change background color of the bank',
-			options: [{
-				type: 'colorpicker',
-				label: 'Foreground color',
-				id: 'fg',
-				default: this.rgb(255, 255, 255)
-			}, {
-				type: 'colorpicker',
-				label: 'Background color',
-				id: 'bg',
-				default: this.rgb(255, 0, 0)
-			}, {
-				type: 'dropdown',
-				label: 'input',
-				id: 'input',
-				default: '10',
-				choices: this.CHOICES_INPUTS
-			}],
-			callback: (feedback, bank) => {
-				console.log("CU"+this.input)
-				console.log("FB"+feedback.options.input)
-				if (this.input === feedback.options.input) {
-					return {
-						color: feedback.options.fg,
-						bgcolor: feedback.options.bg
-					};
-				}
-			}
-		}
-	}
-	return feedbacks
-}
-
 //Define feedbacks
 instance.prototype.initFeedbacks = function() {
 	var feedbacks = this.getFeedbacks();
@@ -170,9 +139,11 @@ instance.prototype.parse_packet = function(packet) {
 		rx_cs = packet.substr(17,2);
 		if(rx_cs != cs) return result;
 
+		// Get data
 		result.ack = (packet.substr(1,1) == "4")
 		result.function = packet.substr(8,3)
-		result.payload = packet.substr(11,6)
+		payload = packet.substr(11,6)
+		result.payload = parseInt(payload,16).toString(16); //Remove leading zeros
 
 		result.valid = true;
 	}
@@ -224,6 +195,63 @@ instance.prototype.build_packet = function(write, action, payload) {
 	return cmd;
 }
 
+instance.prototype.getFeedbacks = function() {
+	var feedbacks = {
+		'input_bg': {
+			label: 'Change background colour by input',
+			description: 'If the input specified is in use, change background color of the bank',
+			options: [{
+				type: 'colorpicker',
+				label: 'Foreground color',
+				id: 'fg',
+				default: this.rgb(255, 255, 255)
+			}, {
+				type: 'colorpicker',
+				label: 'Background color',
+				id: 'bg',
+				default: this.rgb(255, 0, 0)
+			}, {
+				type: 'dropdown',
+				label: 'input',
+				id: 'input',
+				default: '10',
+				choices: this.CHOICES_INPUTS
+			}],
+			callback: (feedback, bank) => {
+				if (this.state.input === feedback.options.input) {
+					return {
+						color: feedback.options.fg,
+						bgcolor: feedback.options.bg
+					};
+				}
+			}
+		},
+		'freeze_bg': {
+			label: 'Change background colour by freeze status',
+			description: 'If the output is frozen, change background color of the bank',
+			options: [{
+				type: 'colorpicker',
+				label: 'Foreground color',
+				id: 'fg',
+				default: this.rgb(255, 255, 255)
+			}, {
+				type: 'colorpicker',
+				label: 'Background color',
+				id: 'bg',
+				default: this.rgb(0, 0, 255)
+			}],
+			callback: (feedback, bank) => {
+				if (this.state.freeze) {
+					return {
+						color: feedback.options.fg,
+						bgcolor: feedback.options.bg
+					};
+				}
+			}
+		},
+	}
+	return feedbacks
+}
 
 // Fields for web config
 instance.prototype.config_fields = function () {
