@@ -5,7 +5,6 @@ var feedback = require('./feedback');
 var debug;
 var log;
 
-
 function instance(system, id, config) {
 	var self = this;
 
@@ -19,7 +18,8 @@ function instance(system, id, config) {
 
 	self.state = {
 		"input" : null,
-		"freeze" : null
+		"freeze" : null,
+		"cts" : true
 	};
 	self.message_queue = [];
 
@@ -35,7 +35,8 @@ instance.prototype.updateConfig = function(config) {
 	self.message_queue = [];
 	self.state = {
 		"input" : null,
-		"freeze" : null
+		"freeze" : null,
+		"cts" : true
 	};
 };
 
@@ -69,7 +70,7 @@ instance.prototype.incomingData = function(data) {
 	}
 
 	//Send next message
-	self.message_queue.shift(); //Remove acked message
+	self.state.cts = true; //Ready to send another
 	self.queue_pop();
 
 	if(result.function === self.FUNCTION_CODES.input) {
@@ -331,10 +332,11 @@ instance.prototype.actions = function (system) {
 instance.prototype.queue_pop = function() {
 	self = this;
 
-	if(self.message_queue.length === 0) return; // Empty
-	cmd = self.message_queue[0] // Get first element
+	if(self.message_queue.length === 0 || (!self.state.cts)) return; // Empty
+	cmd = self.message_queue.shift(); // Get first element
 
 	if (self.socket !== undefined && self.socket.connected) {
+		self.state.cts = false
 		self.socket.write(cmd);
 	} else {
 		debug('Socket not connected :(');
@@ -344,7 +346,7 @@ instance.prototype.queue_pop = function() {
 instance.prototype.send = function(data) {
 	// Add to queue
 	this.message_queue.push(data)
-	if(this.message_queue.length == 1) { //Nothing in flight or queued
+	if(this.state.cts) { //Nothing in flight or queued
 		this.queue_pop()
 	}
 }
