@@ -60,6 +60,10 @@ instance.prototype.incomingData = function(data) {
 		return;
 	}
 
+	//Send next message
+	self.state.cts = true; //Ready to send another
+	self.queue_pop();
+
 	if(result.ack) {
 		self.login = true;
 		self.status(self.STATUS_OK);
@@ -68,10 +72,6 @@ instance.prototype.incomingData = function(data) {
 		self.status(self.STATE_UNKNOWN);
 		return;
 	}
-
-	//Send next message
-	self.state.cts = true; //Ready to send another
-	self.queue_pop();
 
 	if(result.function === self.FUNCTION_CODES.input) {
 		self.state.input = result.payload; //Remove leading zeros
@@ -163,7 +163,10 @@ instance.prototype.parse_packet = function(packet) {
 		packet_content = packet.substring(1,17)
 		cs = self.calculate_checksum(packet_content)
 		rx_cs = packet.substr(17,2);
-		if(rx_cs != cs) return result;
+		if(rx_cs != cs) {
+			debug('Checksum error');
+			return result;
+		}
 
 		// Get data
 		result.ack = (packet.substr(1,1) == "4")
@@ -187,6 +190,7 @@ instance.prototype.calculate_checksum = function(data) {
 	  }
 	cs = sum.toString(16);
 	cs = cs.slice(-2); // Limit to two chars
+	cs = cs.toUpperCase()
 	return cs;
 }
 
@@ -279,16 +283,17 @@ instance.prototype.CHOICES_INPUTS = [
 instance.prototype.CHOICES_TRANSITIONS = [
 	{ label: 'CUT',   id: '0'   },
 	{ label: 'FADE',   id: '1'   },
-	{ label: 'PUSH RIGHT',  id: '2'  },
-	{ label: 'PUSH LEFT',  id: '3'   },
-	{ label: 'PUSH UP', id: '4' },
-	{ label: 'PUSH DOWN', id: '5' },
-	{ label: 'WIPE RIGHT', id: '6' },
-	{ label: 'WIPE LEFT', id: '7' },
-	{ label: 'WIPE UP', id: '8' },
-	{ label: 'WIPE DOWN', id: '9' },
-	{ label: 'WIPE DIAGONAL', id: '10' },
-	{ label: 'WIPE DIAMOND', id: '11' }
+	{ label: 'WIPE',  id: '2'  },
+	{ label: 'PUSH',  id: '3'   }
+];
+
+instance.prototype.CHOICES_WIPE_TYPE = [
+	{ label: 'RIGHT',   id: '0'   },
+	{ label: 'LEFT',   id: '1'   },
+	{ label: 'DOWN',  id: '2'  },
+	{ label: 'UP',  id: '3'   },
+	{ label: 'DIAGONAL',  id: '4'   },
+	{ label: 'DIAMOND',  id: '5'   }
 ];
 
 instance.prototype.actions = function (system) {
@@ -322,6 +327,16 @@ instance.prototype.actions = function (system) {
 					id: 'transition',
 					default: '0',
 					choices: self.CHOICES_TRANSITIONS
+			}]
+		},
+		'wipe': {
+			label: 'Set wipe direction',
+			options: [{
+					type: 'dropdown',
+					label: 'direction',
+					id: 'direction',
+					default: '0',
+					choices: self.CHOICES_WIPE_TYPE
 			}]
 		}
 	};
@@ -375,6 +390,11 @@ instance.prototype.action = function (action) {
 		case 'transition':
 			if (opt.transition !== null ) {
 				cmd = this.build_packet(true, self.FUNCTION_CODES.transition ,opt.transition)
+			}
+			break;
+		case 'wipe':
+			if (opt.wipe !== null ) {
+				cmd = this.build_packet(true, self.FUNCTION_CODES.wipe ,opt.direction)
 			}
 			break;
 	}
