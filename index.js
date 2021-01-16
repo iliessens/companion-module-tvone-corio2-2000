@@ -48,7 +48,6 @@ instance.prototype.init = function() {
 	self.initFeedbacks();
 };
 
-
 instance.prototype.incomingData = function(data) {
 	var self = this;
 	debug(data);
@@ -74,7 +73,7 @@ instance.prototype.incomingData = function(data) {
 	}
 
 	if(result.function === self.FUNCTION_CODES.input) {
-		self.state.input = result.payload; //Remove leading zeros
+		self.state.input = result.payload;
 		this.checkFeedbacks('input_bg');
 	}
 	else if(result.function === self.FUNCTION_CODES.freeze) {
@@ -156,7 +155,9 @@ instance.prototype.parse_packet = function(packet) {
 		"function": "",
 		"payload": ""
 	}
-	if(packet.length != 20) return result;
+	if(packet.length != 20) {
+		return result;
+	}
 
 	try {
 		//Verify checksum
@@ -347,7 +348,9 @@ instance.prototype.actions = function (system) {
 instance.prototype.queue_pop = function() {
 	self = this;
 
-	if(self.message_queue.length === 0 || (!self.state.cts)) return; // Empty
+	if(self.message_queue.length === 0 || (!self.state.cts)) {
+		return; // Empty or not ready
+	}
 	cmd = self.message_queue.shift(); // Get first element
 
 	if (self.socket !== undefined && self.socket.connected) {
